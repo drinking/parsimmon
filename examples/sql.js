@@ -168,24 +168,7 @@ CREATE TABLE \`user\` (
 `;
 */
 
-let text = `CREATE TABLE \`t_org_back\` (
-    \`id\` int(11) NOT NULL AUTO_INCREMENT COMMENT '自增编号',
-    \`orgCode\` varchar(50) NOT NULL DEFAULT '' COMMENT '组织编码',
-    \`orgType\` int(11) NOT NULL DEFAULT '0' COMMENT '组织类型',
-    \`name\` varchar(50) NOT NULL DEFAULT '' COMMENT '组织简称',
-    \`parentOrgCode\` varchar(50) NOT NULL DEFAULT '-1' COMMENT '父组织编码',
-    \`fullName\` varchar(200) NOT NULL DEFAULT '' COMMENT '组织全称',
-    \`note\` varchar(500) NOT NULL DEFAULT '' COMMENT '组织全称',
-    \`treeLevel\` int(11) NOT NULL DEFAULT '0' COMMENT '组织深度',
-    \`status\` int(11) NOT NULL DEFAULT '1' COMMENT '组织状态，1有效，0失效',
-    \`orgLongCode\` varchar(300) NOT NULL DEFAULT '' COMMENT '组织树长编码',
-    \`ctime\` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '添加时间',
-    \`mtime\` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    \`cuser\` bigint(20) NOT NULL DEFAULT '0' COMMENT '数据创建人',
-    \`muser\` bigint(20) NOT NULL DEFAULT '0' COMMENT '数据修改人',
-    PRIMARY KEY (\`id\`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='组织结构备份表';
-`
+
 
 // let text = `\
 // CREATE TABLE \`user\` (
