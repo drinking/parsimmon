@@ -17,14 +17,29 @@ function token(parser) {
 
 // Several parsers are just strings with optional whitespace.
 function word(str) {
-    return P.string(str).thru(token);
+    return ignoreCaseString(str).thru(token);
 }
+
+function ignoreCaseString(str) {
+    return P.custom(function(success, failure) {
+        return function(input, i) {
+            var j = i + str.length;
+            var head = input.slice(i, j);
+            if (head === str | head.toLowerCase() == str) {
+              return success(j, head);
+            } else {
+              return failure(i, str);
+            }
+        };
+      });
+  }
+  
 
 function fieldType(type) {
     return P.seqMap(
-        P.string(type),
-        P.alt(token(P.string("(").then(P.digits).skip(P.string(")"))),P.optWhitespace),
-        P.alt(token(P.string("(").then(P.digits).skip(word(",")).then(P.digit).skip(P.string(")"))),P.optWhitespace),
+        ignoreCaseString(type),
+        P.alt(token(ignoreCaseString("(").then(P.digits).skip(ignoreCaseString(")"))),P.optWhitespace),
+        P.alt(token(ignoreCaseString("(").then(P.digits).skip(word(",")).then(P.digit).skip(ignoreCaseString(")"))),P.optWhitespace),
         function(t,l,l2) {
         return t;
     }) 
@@ -80,7 +95,10 @@ function orEmpty(name) {
 
 function argumentValue(name) {
     return P.alt(
-        word(name).skip(P.string("'")).then(P.takeWhile( function(x) { return x !== "'"; })).skip(P.string("'")).skip(whitespace),
+        P.seqMap(word(name),token(word("null")),function(a,b) {
+            return b;
+        }),
+        word(name).skip(ignoreCaseString("'")).then(P.takeWhile( function(x) { return x !== "'"; })).skip(ignoreCaseString("'")).skip(whitespace),
         P.seqMap(word(name),orEmpty("current_timestamp"),orEmpty("on"),orEmpty("update"),orEmpty("current_timestamp"),
         function(a,b,c,d,e) {
             if(e) {
@@ -92,22 +110,21 @@ function argumentValue(name) {
         P.optWhitespace);
 }
 
-function skipToRBracket() {
-    return P.takeWhile(function(x) {
-        return x !== ")";
-    });
-}
-
-function skipTo(text) {
+function tableComment() {
         return P.custom(function(success, failure) {
           return function(input, i) {
-            var index = input.lastIndexOf("comment");
+            const newStr = input.slice().toLowerCase();
+            var index = newStr.lastIndexOf("comment");
             var lastBracket = input.lastIndexOf(")");
             if(index > 0 && index > lastBracket) {
-              var result = P.all.wrap(word("'"),word("'")).tryParse(input.substr(index));
-              return success(index, result);
+                var substr = input.substr(index);
+                var r = P.takeWhile(function(x) {
+                    return x !== "'";
+                }).then(token(P.regexp(/'((?:\\.|.)*?)'/))).skip(P.all).tryParse(substr);
+                r = r.slice(1,-1);
+              return success(input.length, r);
             }
-            return failure(i, "skip to " + text + "failure");
+            return success(input.length, "");
           };
         });
 }
@@ -115,12 +132,14 @@ function skipTo(text) {
 let JSONParser = P.createLanguage({
     // This is the main entry point of the parser: a full JSON value.
     value: r =>
-        P.seqMap(r.create,r.name,r.lbracket,r.fields, skipTo("comment"),function(create,tableName,ignore1,fields,comment) {
-            return {tableName,fields}
+        P.seqMap(r.create,r.name,r.lbracket,r.fields, tableComment(),
+        function(create,tableName,ignore1,fields,comment) {
+            return {tableName,fields,comment}
         }),
-     // r.create.then(r.name).skip(r.lbracket).then(r.fields).skip(P.all),
     // The basic tokens in JSON, with optional whitespace afterward.
-    create: () => token(word("create table")),
+    create: () => token(word("create table")).thru(
+        parser => whitespace.then(parser)
+      ),
     lbracket: () => word("("),
     rbracket: () => word(")"),
     quote: () => word("`"),
@@ -130,10 +149,10 @@ let JSONParser = P.createLanguage({
     // Regexp based parsers should generally be named for better error reporting.
     name: r =>
         token(P.regexp(/[a-z|A-Z|_]+/)
-        .wrap(P.alt(P.string("`"),P.optWhitespace),P.alt(P.string("`"),P.optWhitespace)))
+        .wrap(P.alt(ignoreCaseString("`"),P.optWhitespace),P.alt(ignoreCaseString("`"),P.optWhitespace)))
         .desc("name"),
     fields: r =>
-        P.seqMap(r.name,r.type,r.attributes.trim(P.optWhitespace).many(),
+        P.seqMap(r.name,r.type,P.alt(r.attributes.trim(P.optWhitespace).many(),P.optWhitespace),
         argumentValue("default"),
         argumentValue("comment"),
         function(name,type,others,defaults,comment) {
@@ -146,7 +165,7 @@ let JSONParser = P.createLanguage({
 
 ///////////////////////////////////////////////////////////////////////
 
-/*
+
 let text = `\
 CREATE TABLE \`user\` (
     user_id int unsigned NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -166,17 +185,6 @@ CREATE TABLE \`user\` (
     user_password_expires varbinary(14) DEFAULT NULL
    ) ENGINE=, DEFAULT CHARSET=utf8";
 `;
-*/
 
-
-
-// let text = `\
-// CREATE TABLE \`user\` (
-//     user_id int unsigned NOT NULL PRIMARY KEY AUTO_INCREMENT,
-//     user_name varchar(255) binary,
-//     usexr_name varchar(255) binary NOT NULL default 'xxxx'
-//    );
-// `;
-
-let ast = JSONParser.value.tryParse(text.toLowerCase());
+let ast = JSONParser.value.tryParse(text);
 console.log(ast);
